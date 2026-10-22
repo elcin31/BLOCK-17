@@ -1,0 +1,73 @@
+name: Publish Android release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Android APK workflow run
+        required: true
+        type: string
+      tag:
+        description: Release tag
+        required: true
+        default: v0.1.0
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERIFIED_RUN_ID: ${{ inputs.run_id }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate the tested source
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          run_id = os.environ['VERIFIED_RUN_ID']
+          assert run_id.isdigit()
+          assert re.fullmatch(r'v\d+\.\d+\.\d+', os.environ['RELEASE_TAG'])
+          run = json.loads(subprocess.check_output(['gh', 'api', f'repos/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{run_id}']))
+          assert run['conclusion'] == 'success', 'Only successful builds may be published'
+          assert run['path'] == '.github/workflows/android.yml'
+          assert run['head_branch'] == 'main'
+          subprocess.run(['git', 'diff', '--exit-code', run['head_sha'], 'HEAD', '--', 'project.godot', 'export_presets.cfg', 'scripts', 'scenes', 'assets'], check=True)
+          print('Runtime source matches verified build', run['head_sha'])
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: BLOCK-17-Android
+          path: builds/release
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify APK and ZIP checksums
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from hashlib import sha256
+          from zipfile import ZipFile
+          p = Path('builds/release')
+          apk = (p/'BLOCK-17.apk').read_bytes()
+          assert sha256(apk).hexdigest() == (p/'SHA256SUMS.txt').read_text().split()[0]
+          with ZipFile(p/'BLOCK-17-Android.zip') as z:
+              assert z.testzip() is None
+              assert z.read('BLOCK-17.apk') == apk
+          print('Verified release APK SHA256:', sha256(apk).hexdigest())
+          PY
+      - name: Publish verified files
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" builds/release/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest --notes-file docs/RELEASE-NOTES.md
+          else
+            gh release create "$RELEASE_TAG" builds/release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'BLOCK 17 · 0.1.0 — живой район' --notes-file docs/RELEASE-NOTES.md
+          fi
