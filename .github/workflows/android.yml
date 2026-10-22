@@ -85,6 +85,21 @@ jobs:
             builds/BLOCK-17-Android.zip
             builds/SHA256SUMS.txt
           if-no-files-found: error
+      - name: Enable KVM for Android runtime test
+        run: sudo chmod 666 /dev/kvm
+      - name: Install and test APK offline on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          profile: pixel_4
+          cores: 2
+          ram-size: 2048M
+          heap-size: 256M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: python3 tools/test_android.py
       - name: Upload test results and screenshots
         if: always()
         uses: actions/upload-artifact@v4
