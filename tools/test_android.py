@@ -23,12 +23,16 @@ def tap(x, y):
 
 
 def screenshot(name):
-    data = adb('exec-out', 'screencap', '-p', binary=True)
-    assert data[:8] == b'\x89PNG\r\n\x1a\n', 'valid Android screenshot'
-    width, height = struct.unpack('>II', data[16:24])
-    assert (width, height) == (1280, 720), f'landscape viewport: {width}x{height}'
-    (ROOT / 'builds' / name).write_bytes(data)
-    assert len(data) > 30000, 'rendered scene is not blank'
+    for _ in range(20):
+        data = adb('exec-out', 'screencap', '-p', binary=True)
+        assert data[:8] == b'\x89PNG\r\n\x1a\n', 'valid Android screenshot'
+        width, height = struct.unpack('>II', data[16:24])
+        assert (width, height) == (1280, 720), f'landscape viewport: {width}x{height}'
+        (ROOT / 'builds' / name).write_bytes(data)
+        if len(data) > 30000:
+            return
+        time.sleep(1)
+    raise AssertionError('game scene did not render after shader warmup')
 
 
 def read_save():
@@ -62,10 +66,17 @@ atexit.register(collect_logs)
 adb('wait-for-device')
 assert adb('shell', 'getprop', 'sys.boot_completed') == '1'
 adb('shell', 'wm', 'size', '720x1280')
+adb('shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0')
+adb('shell', 'settings', 'put', 'system', 'user_rotation', '1')
+adb('shell', 'input', 'keyevent', '82')
+adb('shell', 'wm', 'dismiss-keyguard')
 adb('shell', 'settings', 'put', 'global', 'airplane_mode_on', '1')
 adb('shell', 'svc', 'wifi', 'disable')
 adb('shell', 'svc', 'data', 'disable')
 adb('install', '--no-streaming', str(ROOT / 'builds/BLOCK-17.apk'))
+# First-boot overlay/configuration updates can recreate an activity mid-initialization.
+# Settle the fresh emulator before starting the engine and testing its lifecycle.
+time.sleep(20)
 adb('logcat', '-c')
 launch()
 screenshot('android-01-menu.png')
