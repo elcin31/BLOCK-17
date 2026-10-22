@@ -86,5 +86,6 @@ func run() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveStore.path_for("slot2") + suffix))
 	print("UI: %d checks, %d failures" % [checks, failures])
 	game.free()
-	await process_frame
+	# Allow the audio mixer to release its final playback reference before shutdown.
+	await create_timer(0.2).timeout
 	quit(1 if failures else 0)

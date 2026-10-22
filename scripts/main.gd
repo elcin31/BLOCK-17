@@ -36,9 +36,6 @@ var person_labels: Dictionary = {}
 var person_version: String = ""
 var settings = {"ambience": true, "low_detail": false}
 var audio: AudioStreamPlayer
-var ambient_playback: AudioStreamGeneratorPlayback
-var audio_phase: float = 0
-var sound_rng = RandomNumberGenerator.new()
 var screen_blocker: ColorRect
 
 func _ready() -> void:
@@ -53,6 +50,8 @@ func _ready() -> void:
 	city.building_selected.connect(_show_building)
 	city.ground_selected.connect(_on_ground)
 	_create_theme()
+	get_viewport().size_changed.connect(_apply_safe_area)
+	call_deferred("_apply_safe_area")
 	_create_hud()
 	_create_side()
 	_create_toast()
@@ -87,6 +86,19 @@ func _create_theme() -> void:
 	theme.set_constant("separation", "VBoxContainer", 9)
 	theme.set_constant("separation", "HBoxContainer", 9)
 	ui.theme = theme
+
+func _apply_safe_area() -> void:
+	if not OS.has_feature("android"):
+		return
+	var safe = DisplayServer.get_display_safe_area()
+	var window = DisplayServer.window_get_size()
+	if window.x <= 0 or window.y <= 0 or safe.size.x <= 0:
+		return
+	var ratio = get_viewport_rect().size / Vector2(window)
+	ui.offset_left = maxf(0, safe.position.x) * ratio.x
+	ui.offset_top = maxf(0, safe.position.y) * ratio.y
+	ui.offset_right = -maxf(0, window.x - safe.end.x) * ratio.x
+	ui.offset_bottom = -maxf(0, window.y - safe.end.y) * ratio.y
 
 func _style(color: Color, radius: int = 8, border: Color = Color.TRANSPARENT) -> StyleBoxFlat:
 	var s = StyleBoxFlat.new()
@@ -721,37 +733,29 @@ func _save_settings() -> void:
 	config.save("user://settings.cfg")
 
 func _create_audio() -> void:
-	# Original, quiet procedural soundscape: wind, distant traffic and birds.
-	# Buffered ahead only while enabled; no network or external audio dependency.
+	# Original procedural soundscape, precomputed to avoid per-frame audio generation.
+	if AudioServer.get_driver_name() == "Dummy":
+		return
 	audio = AudioStreamPlayer.new()
-	var stream = AudioStreamGenerator.new()
-	stream.mix_rate = 11025
-	stream.buffer_length = 0.15
+	var stream = preload("res://assets/city-ambience.wav")
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_begin = 0
+	stream.loop_end = int(stream.get_length() * stream.mix_rate)
 	audio.stream = stream
 	audio.volume_db = -28
 	add_child(audio)
 	audio.play()
-	ambient_playback = audio.get_stream_playback()
-	sound_rng.seed = 17
 
 func _feed_audio() -> void:
-	if ambient_playback == null:
+	if audio == null:
 		return
-	var frames = ambient_playback.get_frames_available()
-	for _i in frames:
-		audio_phase += 1.0 / 11025.0
-		var sample = 0.0
-		if settings.ambience:
-			var bird = pow(maxf(0, sin(audio_phase * 0.63)), 32)
-			sample = sound_rng.randf_range(-0.13, 0.13) + sin(audio_phase * 91) * 0.08
-			if sim.minute > 350 and sim.minute < 1150:
-				sample += sin(audio_phase * (3900 + sin(audio_phase * 17) * 700)) * bird * 0.3
-		ambient_playback.push_frame(Vector2.ONE * sample)
+	audio.volume_db = -28.0 if settings.ambience else -80.0
+	audio.pitch_scale = 0.85 if city.is_night else 1.0
 
 func _exit_tree() -> void:
 	if is_instance_valid(audio):
 		audio.stop()
-	ambient_playback = null
+		audio.stream = null
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_CLOSE_REQUEST:
