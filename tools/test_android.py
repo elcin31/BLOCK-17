@@ -43,7 +43,7 @@ def read_save():
 
 
 def launch():
-    adb('shell', 'am', 'start', '-W', '-n', PACKAGE + '/com.godot.game.GodotApp')
+    adb('shell', 'am', 'start', '-W', '-n', PACKAGE + '/com.godot.game.GodotAppLauncher')
     time.sleep(5)
     assert adb('shell', 'pidof', PACKAGE), 'game process alive'
 
