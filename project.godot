@@ -27,7 +27,7 @@ renderer/rendering_method.web="gl_compatibility"
 
 [input_devices]
 pointing/emulate_touch_from_mouse=false
-pointing/emulate_mouse_from_touch=false
+pointing/emulate_mouse_from_touch=true
 
 [audio]
 driver/enable_input=false

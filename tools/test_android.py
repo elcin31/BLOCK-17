@@ -1,5 +1,6 @@
 """Run the exported APK, tap its UI and verify real Android save restoration."""
 import hashlib
+import atexit
 import json
 import re
 import struct
@@ -26,8 +27,8 @@ def screenshot(name):
     assert data[:8] == b'\x89PNG\r\n\x1a\n', 'valid Android screenshot'
     width, height = struct.unpack('>II', data[16:24])
     assert (width, height) == (1280, 720), f'landscape viewport: {width}x{height}'
-    assert len(data) > 30000, 'rendered scene is not blank'
     (ROOT / 'builds' / name).write_bytes(data)
+    assert len(data) > 30000, 'rendered scene is not blank'
 
 
 def read_save():
@@ -46,6 +47,16 @@ def launch():
     adb('shell', 'am', 'start', '-W', '-n', PACKAGE + '/com.godot.game.GodotAppLauncher')
     time.sleep(5)
     assert adb('shell', 'pidof', PACKAGE), 'game process alive'
+
+
+def collect_logs():
+    try:
+        (ROOT / 'builds/android-runtime.log').write_text(adb('logcat', '-d'))
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+
+atexit.register(collect_logs)
 
 
 adb('wait-for-device')

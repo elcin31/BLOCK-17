@@ -28,7 +28,17 @@ func run() -> void:
 	game._show_settings()
 	check(game.side.visible, "settings opens from main menu")
 	game._close_panel()
-	game._new_game()
+	var press = InputEventScreenTouch.new()
+	press.index = 0
+	press.position = Vector2(200, 388)
+	press.pressed = true
+	Input.parse_input_event(press)
+	var release = InputEventScreenTouch.new()
+	release.index = 0
+	release.position = press.position
+	release.pressed = false
+	Input.parse_input_event(release)
+	await process_frame
 	check(game.running and game.hud.visible, "new game starts")
 	game._set_speed(0)
 	var minute = game.sim.minute

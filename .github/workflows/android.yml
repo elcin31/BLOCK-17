@@ -97,7 +97,7 @@ jobs:
           cores: 2
           ram-size: 2048M
           heap-size: 256M
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-window -gpu swangle -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: python3 tools/test_android.py
       - name: Upload test results and screenshots

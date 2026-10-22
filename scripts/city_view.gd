@@ -180,6 +180,9 @@ func _release_touch(index: int) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not active:
 		return
+	# Controls use emulated mouse clicks; the map handles native multitouch once.
+	if event is InputEventMouse and event.device == -1:
+		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
 			zoom_by(1.12)
