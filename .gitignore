@@ -1,0 +1,8 @@
+.godot/
+.tools/
+builds/*
+!builds/.gitkeep
+!builds/.gdignore
+*.keystore
+*.log
+__pycache__/

@@ -1,0 +1,92 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.6.3
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Android build tools
+        run: sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Cache Godot
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .tools/godot
+          key: godot-android-${{ env.GODOT_VERSION }}
+      - name: Download Godot and official Android templates
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .tools/godot
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fL --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o .tools/godot.zip
+          unzip -q .tools/godot.zip -d .tools/godot
+          curl -fL --retry 3 "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -o .tools/templates.tpz
+          unzip -j .tools/templates.tpz 'templates/android_debug.apk' 'templates/android_release.apk' -d .tools/godot/templates
+      - name: Prepare export environment
+        run: |
+          mkdir -p .tools/export_templates/${GODOT_VERSION}.stable builds
+          cp .tools/godot/templates/*.apk .tools/export_templates/${GODOT_VERSION}.stable/
+          chmod +x .tools/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          echo "$PWD/.tools/godot" >> "$GITHUB_PATH"
+          keytool -genkeypair -keystore .tools/debug.keystore -storepass android -alias androiddebugkey -keypass android -dname 'CN=BLOCK17 Development,O=BLOCK17,C=US' -keyalg RSA -keysize 2048 -validity 10000
+      - name: Import and check scripts
+        run: |
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path . --editor --import --quit 2>&1 | tee builds/import.log
+          ! grep -E 'SCRIPT ERROR|ERROR:' builds/import.log
+      - name: Simulation and UI tests
+        run: |
+          export XDG_DATA_HOME="$PWD/builds/test-data"
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path . --script tests/test_simulation.gd 2>&1 | tee builds/simulation.log
+          xvfb-run -a Godot_v${GODOT_VERSION}-stable_linux.x86_64 --path . --audio-driver Dummy --rendering-method gl_compatibility --script tests/test_ui.gd 2>&1 | tee builds/ui.log
+          ! grep -E 'SCRIPT ERROR|ERROR:' builds/simulation.log builds/ui.log
+      - name: Configure signing and SDK
+        run: |
+          export GODOT_ANDROID_SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          export GODOT_JAVA_HOME="$JAVA_HOME"
+          export GODOT_ANDROID_KEYSTORE="$PWD/.tools/debug.keystore"
+          python3 tools/configure_android.py
+      - name: Export installable APK
+        run: |
+          Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path . --export-debug Android builds/BLOCK-17.apk 2>&1 | tee builds/export.log
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose builds/BLOCK-17.apk
+          python3 tools/package_android.py
+      - name: Upload Android package
+        uses: actions/upload-artifact@v4
+        with:
+          name: BLOCK-17-Android
+          path: |
+            builds/BLOCK-17.apk
+            builds/BLOCK-17-Android.zip
+            builds/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Upload test results and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BLOCK-17-Test-Results
+          path: |
+            builds/*.log
+            builds/*.png
