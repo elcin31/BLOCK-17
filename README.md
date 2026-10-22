@@ -66,7 +66,7 @@ XDG_DATA_HOME="$PWD/builds/test-data" xvfb-run -a godot --path . --audio-driver 
 
 ## Сборка APK
 
-Workflow `.github/workflows/android.yml` запускается при push в `main`, pull request и вручную. Он устанавливает Godot, Java 21, Android SDK 36 и Build Tools 36.0.0, импортирует ресурсы, выполняет тесты, экспортирует и проверяет подписанный APK, затем создаёт `BLOCK-17-Android.zip` с инструкцией и SHA-256. Готовые файлы — в артефакте `BLOCK-17-Android`; логи и снимки — в `BLOCK-17-Test-Results`.
+Workflow `.github/workflows/android.yml` запускается при push в `main`, pull request и вручную. Он устанавливает Godot, Java 21, Android SDK 36 и Build Tools 36.0.0, импортирует ресурсы, выполняет тесты, экспортирует и проверяет подписанный APK, затем создаёт `BLOCK-17-Android.zip` с инструкцией и SHA-256. Дополнительный этап на Android 11 с KVM устанавливает APK, отключает сеть, проверяет запуск, касания, отрисовку, автосохранение и восстановление после остановки процесса. Готовые файлы — в артефакте `BLOCK-17-Android`; логи и снимки — в `BLOCK-17-Test-Results`.
 
 Для локальной сборки в Linux установите Java 21 и Android SDK с `platform-tools`, `platforms;android-36`, `build-tools;36.0.0`. Из официального `Godot_v4.6.3-stable_export_templates.tpz` извлеките `android_debug.apk` и `android_release.apk` в `.tools/export_templates/4.6.3.stable/`.
 
